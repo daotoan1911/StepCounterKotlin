@@ -5,11 +5,15 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.Button
+import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.widget.TextViewCompat
@@ -20,9 +24,16 @@ import com.google.android.gms.fit.samples.common.logger.LogWrapper
 import com.google.android.gms.fit.samples.common.logger.MessageOnlyLogFilter
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
+import com.google.android.gms.fitness.data.DataPoint
+import com.google.android.gms.fitness.data.DataSet
 import com.google.android.gms.fitness.data.DataType
 import com.google.android.gms.fitness.data.Field
+import com.google.android.gms.fitness.request.DataReadRequest
 import com.google.android.material.snackbar.Snackbar
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.util.concurrent.TimeUnit
 
 const val TAG = "StepCounter"
 
@@ -40,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private val runningQOrLater =
             android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -47,7 +59,11 @@ class MainActivity : AppCompatActivity() {
         initializeLogging()
 
         checkPermissionsAndRun(FitActionRequestCode.SUBSCRIBE)
+
     }
+
+    //Kiểm tra xem người dùng đã đăng nhập chưa và nếu có, thực thi chức năng được chỉ định
+    //Nếu người dùng là chưa đăng nhập, bắt đầu quy trình đăng nhập, chỉ định hàm sau đăng nhập để thực thi
 
     private fun checkPermissionsAndRun(fitActionRequestCode: FitActionRequestCode) {
         if (permissionApproved()) {
@@ -70,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Xử lý lệnh gọi lại từ luồng đăng nhập OAuth, thực hiện chức năng đăng nhập bài đăng
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
@@ -103,6 +120,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun getGoogleAccount() = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
 
+    //Ghi lại dữ liệu bước bằng cách yêu cầu đăng ký dữ liệu bước nền
     private fun subscribe() {
         // To create a subscription, invoke the Recording API. As soon as the subscription is
         // active, fitness data will start recording.
@@ -117,6 +135,7 @@ class MainActivity : AppCompatActivity() {
                 }
     }
 
+    //Đọc tổng số bước hàng ngày hiện tại, được tính từ nửa đêm của ngày hiện tại trên thiết bị múi giờ hiện tại.
     private fun readData() {
         Fitness.getHistoryClient(this, getGoogleAccount())
                 .readDailyTotal(DataType.TYPE_STEP_COUNT_DELTA)
@@ -158,7 +177,7 @@ class MainActivity : AppCompatActivity() {
         // On screen logging via a customized TextView.
         val logView = findViewById<View>(R.id.sample_logview) as LogView
         TextViewCompat.setTextAppearance(logView, R.style.Log)
-        logView.setBackgroundColor(Color.RED)
+        logView.setBackgroundColor(Color.WHITE)
         msgFilter.next = logView
         Log.i(TAG, "Ready")
     }
