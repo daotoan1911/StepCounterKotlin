@@ -5,15 +5,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.Button
-import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.widget.TextViewCompat
@@ -24,16 +20,15 @@ import com.google.android.gms.fit.samples.common.logger.LogWrapper
 import com.google.android.gms.fit.samples.common.logger.MessageOnlyLogFilter
 import com.google.android.gms.fitness.Fitness
 import com.google.android.gms.fitness.FitnessOptions
-import com.google.android.gms.fitness.data.DataPoint
 import com.google.android.gms.fitness.data.DataSet
 import com.google.android.gms.fitness.data.DataType
 import com.google.android.gms.fitness.data.Field
 import com.google.android.gms.fitness.request.DataReadRequest
 import com.google.android.material.snackbar.Snackbar
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
+import java.text.DateFormat
+import java.util.*
 import java.util.concurrent.TimeUnit
+
 
 const val TAG = "StepCounter"
 
@@ -64,7 +59,6 @@ class MainActivity : AppCompatActivity() {
 
     //Kiểm tra xem người dùng đã đăng nhập chưa và nếu có, thực thi chức năng được chỉ định
     //Nếu người dùng là chưa đăng nhập, bắt đầu quy trình đăng nhập, chỉ định hàm sau đăng nhập để thực thi
-
     private fun checkPermissionsAndRun(fitActionRequestCode: FitActionRequestCode) {
         if (permissionApproved()) {
             fitSignIn(fitActionRequestCode)
@@ -86,7 +80,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Xử lý lệnh gọi lại từ luồng đăng nhập OAuth, thực hiện chức năng đăng nhập bài đăng
+    // Xử lý lệnh gọi lại từ luồng đăng nhập OAuth, thực hiện chức năng đăng nhập.
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
@@ -135,20 +129,91 @@ class MainActivity : AppCompatActivity() {
                 }
     }
 
-    //Đọc tổng số bước hàng ngày hiện tại, được tính từ nửa đêm của ngày hiện tại trên thiết bị múi giờ hiện tại.
+    //Đọc tổng số bước hàng ngày hiện tại.
     private fun readData() {
-        Fitness.getHistoryClient(this, getGoogleAccount())
-                .readDailyTotal(DataType.TYPE_STEP_COUNT_DELTA)
-                .addOnSuccessListener { dataSet ->
-                    val total = when {
-                        dataSet.isEmpty -> 0
-                        else -> dataSet.dataPoints.first().getValue(Field.FIELD_STEPS).asInt()
-                    }
-                    Log.i(TAG, "Total steps: $total")
+//        Fitness.getHistoryClient(this, getGoogleAccount())
+//                .readDailyTotal(DataType.TYPE_STEP_COUNT_DELTA)
+//                .addOnSuccessListener { dataSet ->
+//                    val total = when {
+//                        dataSet.isEmpty -> 0
+//                        else -> dataSet.dataPoints.first().getValue(Field.FIELD_STEPS).asInt()
+//                    }
+//                    Log.i(TAG, "Total steps: $total")
+//                }
+//                .addOnFailureListener { e ->
+//                    Log.w(TAG, "There was a problem getting the step count.", e)
+//                }
+        val cal: Calendar = Calendar.getInstance()
+        val now = Date()
+        cal.setTime(Date())
+        val endtime: Long = cal.getTimeInMillis()
+        cal.add(Calendar.WEEK_OF_MONTH, -1)
+        val starttime: Long = cal.getTimeInMillis()
+
+//        val dateFormat: DateFormat = DateFormat.getDateInstance()
+//        Log.e("History", "Range Start: " + dateFormat.format(starttime))
+//        Log.e("History", "Range End: " + dateFormat.format(endtime))
+
+        val readRequest = DataReadRequest.Builder()
+            .aggregate(DataType.TYPE_STEP_COUNT_DELTA, DataType.AGGREGATE_STEP_COUNT_DELTA)
+            .bucketByTime(1, TimeUnit.DAYS)
+            .setTimeRange(starttime, endtime, TimeUnit.MILLISECONDS)
+            .build()
+//
+//        Fitness.getHistoryClient(this,getGoogleAccount())
+//            .readDailyTotal(DataType.TYPE_STEP_COUNT_DELTA)
+//            .addOnSuccessListener { dataSet ->
+//                val total =
+//                    if (dataSet.isEmpty) 0 else dataSet.dataPoints[0].getValue(Field.FIELD_STEPS)
+//                        .asInt().toLong()
+//                showDataSet(dataSet)
+//            }
+//            .addOnFailureListener { e ->
+//                Log.w(TAG, "There was a problem getting the step count.", e)
+//            }
+        Fitness.getHistoryClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+            .readData(readRequest)
+            .addOnSuccessListener { response ->
+                // The aggregate query puts datasets into buckets, so flatten into a
+                // single list of datasets
+                for (dataSet in response.buckets.flatMap { it.dataSets }) {
+                    showDataSet(dataSet)
                 }
-                .addOnFailureListener { e ->
-                    Log.w(TAG, "There was a problem getting the step count.", e)
-                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG,"There was an error reading data from Google Fit", e)
+            }
+
+    }
+
+    private fun showDataSet(dataSet: DataSet) {
+        val dateFormat = DateFormat.getDateInstance()
+        val timeFormat = DateFormat.getTimeInstance()
+        for (dp in dataSet.dataPoints) {
+            Log.e("History", "Data point:")
+            Log.e(
+                "History",
+                "\tStart: " + dateFormat.format(dp.getStartTime(TimeUnit.MILLISECONDS)) + " " + timeFormat.format(
+                    dp.getStartTime(
+                        TimeUnit.MILLISECONDS
+                    )
+                )
+            )
+            Log.e(
+                "History",
+                "\tEnd: " + dateFormat.format(dp.getEndTime(TimeUnit.MILLISECONDS)) + " " + timeFormat.format(
+                    dp.getStartTime(
+                        TimeUnit.MILLISECONDS
+                    )
+                )
+            )
+            for (field in dp.dataType.fields) {
+                Log.e(
+                    "History", "\tField: " + field.name +
+                            " Value: " + dp.getValue(field)
+                )
+            }
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
